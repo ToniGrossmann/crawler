@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
+import json
 import string
 import urlparse
 
 import scrapy
 import logging
 #import urlparse
+import time
+from datetime import datetime
 
 class FireSpider(scrapy.Spider):
 
@@ -41,6 +44,9 @@ class FireSpider(scrapy.Spider):
     def parse(self, response):
         reports = self.reports(response)
         for report in reports:
+            url = response.urljoin(report.extract())
+            logging.debug("Extracted report URL: {}".format(url))
+            yield scrapy.Request(url, self.parse_report_data)
             pass
 
         pages_links = response.xpath('//div[@class="news-list-browse"]/ul/li/a/@href').extract()
@@ -51,7 +57,7 @@ class FireSpider(scrapy.Spider):
         if u'▸' in pagedict:
             logging.info(pages_links)
             url = response.urljoin(pages_links[-2])
-            logging.info("next URL: {}".format(url))
+            logging.info("Next URL: {}".format(url))
             yield scrapy.Request(url, self.parse)
         else:
             self.max_page = str(response.url).split('/')[-2]
@@ -60,6 +66,19 @@ class FireSpider(scrapy.Spider):
         #    url = response.urljoin(pages[-2].xpath('//a/@href').extract())
         #    yield scrapy.Request(url, self.parse)
 
+    def parse_report_data(self, response):
+        contentdict = {}
+        article = response.xpath('//div[@class="news-single-item"]')
+        article_content = article.xpath('.//p/text()')
+        article_time = article.xpath('div[@class="news-list-datetime"]/text()')
+        print(article_time.extract())
+        article_time = datetime.strptime(article_time.extract()[0].replace(u'\xa0', u' '), u'%d.%m.%Y   %H:%M')
+        title = article.xpath('h1/text()')
+        contentdict['title'] = title.extract()
+        contentdict['time'] = str(article_time)
+        contentdict['address'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+        contentdict['district'] = "".join(article_content[1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+        contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip(), article_content[2:]))
 
 
     def parse_results(self, response):
