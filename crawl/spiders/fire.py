@@ -84,9 +84,9 @@ class FireSpider(scrapy.Spider):
         contentdict['url'] = response.url
         contentdict['title'] = title.extract()[0]
         contentdict['time'] = str(article_time)
-        contentdict['street'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+        contentdict['address'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
         contentdict['district'] = "".join(article_content[article_start-1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
-        contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip(), article_content[article_start:]))
+        contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\x1F601').strip().replace(u'\x1F601', u'\n'), article_content[article_start:]))
         reload(sys)
         sys.setdefaultencoding("unicode-escape")
         print(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')).decode("unicode-escape"))
