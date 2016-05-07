@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
+import codecs
 import json
 import string
 import urlparse
 
+import re
 import scrapy
 import logging
 #import urlparse
 import time
 from datetime import datetime
+
+import sys
+
 
 class FireSpider(scrapy.Spider):
 
@@ -74,12 +79,15 @@ class FireSpider(scrapy.Spider):
         print(article_time.extract())
         article_time = datetime.strptime(article_time.extract()[0].replace(u'\xa0', u' '), u'%d.%m.%Y   %H:%M')
         title = article.xpath('h1/text()')
-        contentdict['title'] = title.extract()
+        contentdict['id'] = re.search(r"([0-9]+)\/$", response.url).group(1)
+        contentdict['title'] = title.extract()[0]
         contentdict['time'] = str(article_time)
         contentdict['address'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
         contentdict['district'] = "".join(article_content[1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
         contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip(), article_content[2:]))
-
+        reload(sys)
+        sys.setdefaultencoding("unicode-escape")
+        print(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')).decode("unicode-escape"))
 
     def parse_results(self, response):
 
