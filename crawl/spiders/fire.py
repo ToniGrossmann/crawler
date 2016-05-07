@@ -75,16 +75,18 @@ class FireSpider(scrapy.Spider):
         contentdict = {}
         article = response.xpath('//div[@class="news-single-item"]')
         article_content = article.xpath('.//p/text()')
-        article_time = article.xpath('div[@class="news-list-datetime"]/text()')
-        print(article_time.extract())
-        article_time = datetime.strptime(article_time.extract()[0].replace(u'\xa0', u' '), u'%d.%m.%Y   %H:%M')
+        article_time = datetime.strptime(article.xpath('div[@class="news-list-datetime"]/text()').extract()[0].replace(u'\xa0', u' '), u'%d.%m.%Y   %H:%M')
         title = article.xpath('h1/text()')
+        article_start = 2
+        if article_content[1].extract() == u' ': article_start = 3
+
         contentdict['id'] = re.search(r"([0-9]+)\/$", response.url).group(1)
+        contentdict['url'] = response.url
         contentdict['title'] = title.extract()[0]
         contentdict['time'] = str(article_time)
-        contentdict['address'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
-        contentdict['district'] = "".join(article_content[1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
-        contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip(), article_content[2:]))
+        contentdict['street'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+        contentdict['district'] = "".join(article_content[article_start-1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+        contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip(), article_content[article_start:]))
         reload(sys)
         sys.setdefaultencoding("unicode-escape")
         print(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')).decode("unicode-escape"))
