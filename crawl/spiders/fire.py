@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import codecs
+import collections
 import json
 import string
 import urlparse
@@ -13,6 +14,8 @@ from datetime import datetime
 
 import sys
 
+from natsort import natsort_keygen, ns
+
 
 class FireSpider(scrapy.Spider):
 
@@ -21,30 +24,17 @@ class FireSpider(scrapy.Spider):
     start_urls = (
         'http://www.berliner-feuerwehr.de/aktuelles/einsaetze/',
     )
-    max_page = None
+
+    def natural_sort(self, l):
+        convert = lambda text: int(text) if text.isdigit() else text
+        alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+        return sorted(l, key=alphanum_key)
 
     def reports(self, response):
         return response.xpath('//div[@class="news-list-item"]/p/span[@class="nlmore"]/a/@href')
 
     def pages(self, response):
         return response.xpath('//div[@class="news-list-browse"]/ul/li/a/@href')
-
-    """
-    def get_pages(self, response):
-
-
-        pages = [response.urljoin(x.extract()) for x in self.pages(response)]
-        pages = sorted(set(pages))
-        for page in pages:
-            logging.info(page)
-        url = response.urljoin(pages[-1].extract())
-
-        yield scrapy.Request(url, callback=self.parse_report_pages)
-        for href in self.pages(response):
-            url = response.urljoin(href.extract())
-            self.article_pages.append(url)
-            yield scrapy.Request(url, callback=self.parse_report_pages)
-    """
 
     def parse(self, response):
         reports = self.reports(response)
@@ -61,7 +51,13 @@ class FireSpider(scrapy.Spider):
         #logging.info(pagedict)
         if u'▸' in pagedict:
             logging.info(pages_links)
-            url = response.urljoin(pages_links[-2])
+            first_last = self.natural_sort([item for item, count in collections.Counter(pages_links).items() if count > 1])
+            logging.info("first_last: {}".format(first_last))
+            if len(first_last) > 1:
+                url = response.urljoin(first_last[1])
+            else:
+                url = response.urljoin(first_last[0])
+                #url = response.urljoin(pages_links[-2])
             logging.info("Next URL: {}".format(url))
             yield scrapy.Request(url, self.parse)
         else:
@@ -89,7 +85,7 @@ class FireSpider(scrapy.Spider):
         contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\x1F601').strip().replace(u'\x1F601', u'\n'), article_content[article_start:]))
         reload(sys)
         sys.setdefaultencoding("unicode-escape")
-        print(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')).decode("unicode-escape"))
+        logging.debug(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')).decode("unicode-escape"))
 
     def parse_results(self, response):
 
