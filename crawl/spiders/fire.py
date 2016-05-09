@@ -73,7 +73,7 @@ class FireSpider(scrapy.Spider):
         logging.info("Current URL: {}".format(response.url))
         #logging.info(pagedict)
         if u'▸' in pagedict:
-            logging.info(pages_links)
+            logging.debug(pages_links)
             first_last = self.natural_sort([item for item, count in collections.Counter(pages_links).items() if count > 1])
             logging.info("first_last: {}".format(first_last))
             if len(first_last) > 1:
@@ -98,14 +98,28 @@ class FireSpider(scrapy.Spider):
         title = article.xpath('h1/text()')
         article_start = 2
         if article_content[1].extract() == u' ': article_start = 3
-
+        content_text = u''
         contentdict['id'] = re.search(r"([0-9]+)\/$", response.url).group(1)
+        if contentdict['id'] == '3002': return
         contentdict['url'] = response.url
         contentdict['title'] = title.extract()[0]
         contentdict['time'] = str(article_time)
         contentdict['address'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+        contentdict['address'] = re.sub(r'^: ', '', contentdict['address'])
         contentdict['district'] = "".join(article_content[article_start-1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
-        contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\x1F601').strip().replace(u'\x1F601', u'\n'), article_content[article_start:]))
+        contentdict['district'] = re.sub(r'^: ', '', contentdict['district'])
+        # move address and/or district inside content if a certain length is exceeded
+        if len(contentdict['address']) > 40:
+            content_text += ''.join(contentdict['address']+'\r')
+            contentdict['address'] = ''
+            article_start -= 1
+        if len(contentdict['district']) > 25:
+            content_text += ''.join(contentdict['district']+'\r')
+            contentdict['district'] = ''
+            article_start -= 1
+
+        content_text += ''.join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\x1F601').strip().replace(u'\x1F601', u'\n'), article_content[article_start:]))
+        contentdict['content'] = content_text
         c = self.conn.cursor()
         #c.execute('''CREATE TABLE reports (id integer primary key, address text, content text, district text, url text, time text, title text)''')
 
