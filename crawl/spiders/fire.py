@@ -2,6 +2,7 @@
 import codecs
 import collections
 import json
+import os
 import string
 import urlparse
 
@@ -14,6 +15,7 @@ from datetime import datetime
 
 import sys
 
+import sqlite3
 from natsort import natsort_keygen, ns
 
 
@@ -24,6 +26,23 @@ class FireSpider(scrapy.Spider):
     start_urls = (
         'http://www.berliner-feuerwehr.de/aktuelles/einsaetze/',
     )
+    conn = None
+
+    def __init__(self):
+        self.connect_to_sqlite()
+
+    def connect_to_sqlite(self):
+        dbfile = u'sqlite3.db'
+        d = os.path.dirname(os.path.abspath(dbfile))
+        if not os.path.exists(d):
+            os.makedirs(d)
+        if os.path.isfile(dbfile):
+            self.conn = sqlite3.connect(dbfile)
+        else:
+            self.conn = sqlite3.connect(dbfile)
+            c = self.conn.cursor()
+            c.execute('''CREATE TABLE reports (id integer primary key, address text, content text, district text, url text, time text, title text)''')
+            self.conn.commit()
 
     def natural_sort(self, l):
         convert = lambda text: int(text) if text.isdigit() else text
@@ -38,11 +57,15 @@ class FireSpider(scrapy.Spider):
 
     def parse(self, response):
         reports = self.reports(response)
+        #contentdict['id'] = re.search(r"([0-9]+)\/$", response.url).group(1)
+
         for report in reports:
-            url = response.urljoin(report.extract())
-            logging.debug("Extracted report URL: {}".format(url))
-            yield scrapy.Request(url, self.parse_report_data)
-            pass
+            report_id = (re.search(r"([0-9]+)\/$", report.extract()).group(1),)
+            check_id = list(self.conn.cursor().execute('''SELECT count(id) from reports where id = ?''', report_id).fetchone())[0]
+            if check_id == 0:
+                url = response.urljoin(report.extract())
+                logging.debug("Extracted report URL: {}".format(url))
+                yield scrapy.Request(url, self.parse_report_data)
 
         pages_links = response.xpath('//div[@class="news-list-browse"]/ul/li/a/@href').extract()
         pages_text = response.xpath('//div[@class="news-list-browse"]/ul/li/a/text()').extract()
@@ -83,6 +106,11 @@ class FireSpider(scrapy.Spider):
         contentdict['address'] = "".join(article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
         contentdict['district'] = "".join(article_content[article_start-1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
         contentdict['content'] = "".join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace(u'\r', u'\x1F601').strip().replace(u'\x1F601', u'\n'), article_content[article_start:]))
+        c = self.conn.cursor()
+        #c.execute('''CREATE TABLE reports (id integer primary key, address text, content text, district text, url text, time text, title text)''')
+
+        c.execute('INSERT INTO reports VALUES (?, ?, ?, ?, ?, ?, ?)', (contentdict['id'], contentdict['address'], contentdict['content'], contentdict['district'] ,contentdict['url'] ,contentdict['time'], contentdict['title']))
+        self.conn.commit()
         reload(sys)
         sys.setdefaultencoding("unicode-escape")
         logging.debug(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')).decode("unicode-escape"))
