@@ -111,23 +111,25 @@ class FireSpider(scrapy.Spider):
         contentdict['title'] = title.extract()[0]
         contentdict['time'] = str(article_time)
         contentdict['address'] = "".join(
-            article_content[0].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+            article_content[0].extract().replace(u'\xa0', u' ').strip())
         contentdict['address'] = re.sub(r'^: ', '', contentdict['address'])
         contentdict['district'] = "".join(
-            article_content[article_start - 1].extract().replace(u'\xa0', u' ').replace(u'\r', u'\n\n').strip())
+            article_content[article_start - 1].extract().replace(u'\xa0', u' ').strip())
         contentdict['district'] = re.sub(r'^: ', '', contentdict['district'])
         # move address and/or district inside content if a certain length is exceeded
         if len(contentdict['address']) > 40:
-            content_text += ''.join(contentdict['address'] + '\r')
+            #content_text += ''.join(contentdict['address'] + '\r')
             contentdict['address'] = ''
             article_start -= 1
         if len(contentdict['district']) > 25:
-            content_text += ''.join(contentdict['district'] + '\r')
+            #content_text += ''.join(contentdict['district'] + '\r')
             contentdict['district'] = ''
             article_start -= 1
 
         # content_text += ''.join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content[article_start:]))
-        content_text += ''.join(map(lambda x: x.extract().strip(), article_content[article_start:]))
+        content_text += ''.join(map(lambda x: x.extract().replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content[article_start:]))
+        # replace CR by LF
+        content_text = content_text.replace(u'\r', u'\x0a')
         contentdict['content'] = content_text
         c = self.conn.cursor()
         # c.execute('''CREATE TABLE reports (id integer primary key, address text, content text, district text, url text, time text, title text)''')
