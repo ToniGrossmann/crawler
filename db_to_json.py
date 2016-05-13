@@ -7,7 +7,7 @@ import sys
 
 reload(sys)
 sys.setdefaultencoding("unicode-escape")
-conn = sqlite3.connect('sqlite3.db')
+conn = sqlite3.connect('sqlite.db')
 cur = conn.cursor()
 cur.execute('select * from reports')
 with open('reports.json', 'w') as file:

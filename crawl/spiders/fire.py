@@ -35,7 +35,7 @@ class FireSpider(scrapy.Spider):
 
     def __init__(self):
 
-        engine = create_engine('sqlite:///sqlite.db', echo=True)
+        engine = create_engine('sqlite:///sqlite.db', echo=False)
         self.Session = sessionmaker(bind=engine)
         Base.metadata.create_all(engine)
         #self.connect_to_sqlite()
@@ -93,6 +93,7 @@ class FireSpider(scrapy.Spider):
         contentdict = {}
         article = response.xpath('//div[@class="news-single-item"]')
         article_content = article.xpath('.//p/text()')
+        article_content_html = article.xpath('.//p')
         article_time = datetime.strptime(
             article.xpath('div[@class="news-list-datetime"]/text()').extract()[0].replace(u'\xa0', u' '),
             u'%d.%m.%Y   %H:%M')
@@ -101,7 +102,7 @@ class FireSpider(scrapy.Spider):
         if article_content[1].extract() == u' ': article_start = 3
         content_text = u''
         contentdict['id'] = int(re.search(r"([0-9]+)\/$", response.url).group(1))
-        if contentdict['id'] == 3002: return
+        #if contentdict['id'] == 3002: return
         contentdict['url'] = response.url
         contentdict['title'] = title.extract()[0]
         contentdict['time'] = str(article_time)
@@ -122,7 +123,8 @@ class FireSpider(scrapy.Spider):
             article_start -= 1
 
         # content_text += ''.join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content[article_start:]))
-        content_text += ''.join(map(lambda x: x.extract().replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content[article_start:]))
+        content_text += ''.join(map(lambda x: x.extract().replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content_html[1:]))
+        content_text = re.sub('<[^<]+?>', '', content_text)
         # replace CR by LF
         content_text = content_text.replace(u'\r', u'\x0a')
         contentdict['content'] = content_text
