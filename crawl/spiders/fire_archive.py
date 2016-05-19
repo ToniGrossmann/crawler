@@ -56,7 +56,7 @@ class FireArchiveSpider(scrapy.Spider):
 
     def parse(self, response):
         archive_months = self.archive_months(response)
-        for month in archive_months:
+        for month in archive_months:  #[40:42]
             url = response.urljoin(month.extract())
             yield scrapy.Request(url, self.parse_monthly_reports)
 
@@ -74,6 +74,8 @@ class FireArchiveSpider(scrapy.Spider):
                 yield scrapy.Request(url, self.parse_report_data)
 
         pages_links = response.xpath('//div[@class="news-list-browse"]/ul/li/a/@href').extract()
+        #print("PAGES LINKS:")
+        #print(pages_links)
         pages_text = response.xpath('//div[@class="news-list-browse"]/ul/li/a/text()').extract()
         pagedict = dict(zip(pages_text, pages_links))
         logging.info("Current URL: {}".format(response.url))
@@ -83,9 +85,13 @@ class FireArchiveSpider(scrapy.Spider):
             first_last = self.natural_sort(
                 [item for item, count in collections.Counter(pages_links).items() if count > 1])
             logging.info("first_last: {}".format(first_last))
+            #print("first_last: ")
+            #print(first_last)
             if len(first_last) > 1:
                 url = response.urljoin(first_last[1])
+                #print("im if: " + str(len(first_last)))
             else:
+                #print("im else: " + str(len(first_last)))
                 url = response.urljoin(first_last[0])
                 # url = response.urljoin(pages_links[-2])
             logging.info("Next URL: {}".format(url))
@@ -117,17 +123,25 @@ class FireArchiveSpider(scrapy.Spider):
         contentdict['time'] = str(article_time)
         contentdict['street'] = "".join(
             article_content[0].extract().replace(u'\xa0', u' ').strip())
+
+        # treatment of special case, when street is in a font-tag
+        if not contentdict['street']:
+            contentdict['street'] = "".join(
+                article.xpath('.//p/font/text()')[0].extract().replace(u'\xa0', u' ').strip())
+
         contentdict['street'] = re.sub(r'^: ', '', contentdict['street'])
+
+
         contentdict['district'] = "".join(
             article_content[article_start - 1].extract().replace(u'\xa0', u' ').strip())
         contentdict['district'] = re.sub(r'^: ', '', contentdict['district'])
         # move street and/or district inside content if a certain length is exceeded
-        if len(contentdict['street']) > 40:
+        if len(contentdict['street']) > 100:
             #content_text += ''.join(contentdict['street'] + '\r')
             contentdict['street'] = ''
             article_start -= 1
-        if len(contentdict['district']) > 25:
-            #content_text += ''.join(contentdict['district'] + '\r')
+        if len(contentdict['district']) > 30:
+            # content_text += ''.join(contentdict['district'] + '\r')
             contentdict['district'] = ''
             article_start -= 1
 
@@ -136,6 +150,15 @@ class FireArchiveSpider(scrapy.Spider):
         content_text = re.sub('<[^<]+?>', '', content_text)
         # replace CR by LF
         content_text = content_text.replace(u'\r', u'\x0a')
+
+        # treatment of special case when content contains words at the start that indicate a location
+        if content_text.startswith("Bezirk:") or content_text.startswith("Ort:") \
+                or content_text.startswith("Ortsteil:") or content_text.startswith("Ortsteil :"):
+            district_value = re.sub(r'(Ort:|Bezirk:|Ortsteil:|Ortsteil :)\s*', '', content_text.splitlines()[0]).strip()
+            contentdict['district'] = district_value
+            # removes first line of the string
+            content_text = '\n'.join(content_text.split('\n')[1:])
+
         contentdict['content'] = content_text
         session.add(Report(id = contentdict['id'], street = contentdict['street'],
                            content = contentdict['content'], district = contentdict['district'], url = contentdict['url'], time = contentdict['time'],
