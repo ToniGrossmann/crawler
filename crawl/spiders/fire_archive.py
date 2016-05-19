@@ -124,9 +124,10 @@ class FireArchiveSpider(scrapy.Spider):
         contentdict['street'] = "".join(
             article_content[0].extract().replace(u'\xa0', u' ').strip())
 
-        # treatment of special case, when street is in a font-tag
+        # treatment of special case when street is in a font-tag
         if not contentdict['street']:
-            contentdict['street'] = "".join(
+            if len(article.xpath('.//p/font/text()')) > 0:
+                contentdict['street'] = "".join(
                 article.xpath('.//p/font/text()')[0].extract().replace(u'\xa0', u' ').strip())
 
         contentdict['street'] = re.sub(r'^: ', '', contentdict['street'])
@@ -147,19 +148,23 @@ class FireArchiveSpider(scrapy.Spider):
 
         # content_text += ''.join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content[article_start:]))
         content_text += ''.join(map(lambda x: x.extract().replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content_html[1:]))
-        content_text = re.sub('<[^<]+?>', '', content_text)
-        # replace CR by LF
-        content_text = content_text.replace(u'\r', u'\x0a')
 
         # treatment of special case when content contains words at the start that indicate a location
-        if content_text.startswith("Bezirk:") or content_text.startswith("Ort:") \
-                or content_text.startswith("Ortsteil:") or content_text.startswith("Ortsteil :"):
-            district_value = re.sub(r'(Ort:|Bezirk:|Ortsteil:|Ortsteil :)\s*', '', content_text.splitlines()[0]).strip()
-            contentdict['district'] = district_value
+        if content_text.startswith(("Bezirk:", "Ort:", "Ortsteil:", "Ortsteil :")):
+            contentdict['district'] = re.sub(r'(Ort:|Bezirk:|Ortsteil:|Ortsteil :)\s*', '', content_text.splitlines()[0]).strip()
             # removes first line of the string
             content_text = '\n'.join(content_text.split('\n')[1:])
 
+        # treatment of special case when street and district is missing
+        if not contentdict['street'] and not contentdict['district']:
+            content_text = ''.join(article.xpath('.//p').extract())
+            content_text = content_text.replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n')
+
+        # remove HTML and replace CR by LF
+        content_text = re.sub('<[^<]+?>', '', content_text).replace(u'\r', u'\x0a')
         contentdict['content'] = content_text
+
+
         session.add(Report(id = contentdict['id'], street = contentdict['street'],
                            content = contentdict['content'], district = contentdict['district'], url = contentdict['url'], time = contentdict['time'],
                            title = contentdict['title']))
