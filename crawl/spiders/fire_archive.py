@@ -95,7 +95,7 @@ class FireArchiveSpider(scrapy.Spider):
                 url = response.urljoin(first_last[0])
                 # url = response.urljoin(pages_links[-2])
             logging.info("Next URL: {}".format(url))
-            yield scrapy.Request(url, self.parse)
+            yield scrapy.Request(url, self.parse_monthly_reports)
         else:
             self.max_page = str(response.url).split('/')[-2]
             logging.debug("Max page: {}".format(self.max_page))
