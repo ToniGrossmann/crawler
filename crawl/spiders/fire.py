@@ -91,20 +91,41 @@ class FireSpider(scrapy.Spider):
         session = self.Session()
         contentdict = {}
         article = response.xpath('//div[@class="news-single-item"]')
-        article_content = article.xpath('.//p/text()')
-        article_content_html = article.xpath('.//p')
+        article_content = article.xpath('.//*/p/text()')
+        article_content_html = article.xpath('.//*/p')
         article_time = datetime.strptime(
             article.xpath('div[@class="news-list-datetime"]/text()').extract()[0].replace(u'\xa0', u' '),
             u'%d.%m.%Y   %H:%M')
         title = article.xpath('h1/text()')
-        article_start = 2
-        if article_content[1].extract() == u' ': article_start = 3
+        article_start = 0
+        contentdict['district'] = ''
+        contentdict['street'] = ''
+        if len(article_content) > 1:
+            if len(article_content[0].extract()) < 70:
+                contentdict['street'] = re.sub('^[ \:]*[^a-zA-Z]', '', article_content[0].extract()).strip()
+                article_start += 1
+            if len(article_content[1].extract()) < 50 and len(article_content) > 2:
+                contentdict['district'] = re.sub('^[ \:]*[^a-zA-Z]', '', article_content[1].extract()).strip()
+                if len(contentdict['district']) == 0 and len(article_content[2].extract()) < 50: contentdict['district'] = re.sub('^[ \:]*[^a-zA-Z]', '', article_content[2].extract()).strip()
+                article_start += 1
+
+        #if len(article_content) > 1 and re.match(r'(Straße|Bezirk|Ort|Adresse)', article_content[0].extract()):#article_content[0].extract().startswith(("<b>Bezirk", "<b>Ort", "<b>Ortsteil", "<b>Adresse")):
+        #    article_start = 0
+        #elif len(article_content) > 1:
+        #    article_start = 1
+        #elif len(article_content) > 1 and article_content[1].extract() == u' ': article_start = 2
         content_text = u''
         contentdict['id'] = int(re.search(r"([0-9]+)\/$", response.url).group(1))
         #if contentdict['id'] == 3002: return
         contentdict['url'] = response.url
         contentdict['title'] = title.extract()[0]
         contentdict['time'] = str(article_time)
+
+        #if len(article_content) > 1:
+        #    for i in article_content:
+        #        if re.match(r'(Adresse|Straße)', i.extract()): contentdict['street'] = i.extract().replace(u'\xa0', u' ').strip()
+        #        if re.match(r'Ort', i.extract()): contentdict['district'] = i.extract().replace(u'\xa0', u' ').strip()
+        """
         contentdict['street'] = "".join(
             article_content[0].extract().replace(u'\xa0', u' ').strip())
 
@@ -114,31 +135,43 @@ class FireSpider(scrapy.Spider):
                 contentdict['street'] = "".join(
                 article.xpath('.//p/font/text()')[0].extract().replace(u'\xa0', u' ').strip())
 
-        contentdict['street'] = re.sub(r'^: ', '', contentdict['street'])
+        contentdict['street'] = re.sub(r'^:( *)', '', contentdict['street'])
         contentdict['district'] = "".join(
-            article_content[article_start - 1].extract().replace(u'\xa0', u' ').strip())
-        contentdict['district'] = re.sub(r'^: ', '', contentdict['district'])
+            article_content[article_start].extract().replace(u'\xa0', u' ').strip())
+        contentdict['district'] = re.sub(r'^:( *)', '', contentdict['district'])
         # move street and/or district inside content if a certain length is exceeded
         if len(contentdict['street']) > 100:
             contentdict['street'] = ''
-            article_start -= 1
+            if article_start > 0: article_start -= 1
         if len(contentdict['district']) > 30:
             contentdict['district'] = ''
-            article_start -= 1
-
+            if article_start > 0: article_start -= 1
+        """
+        logging.info('article_start: {}, url: {}'.format(article_start, response.url))
         # content_text += ''.join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content[article_start:]))
-        content_text += ''.join(map(lambda x: x.extract().replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content_html[1:]))
+        #if len(article_content_html) < 3: article_start = 0
 
+        article_start = 0 #workaround for reports having address and district inside the same tag as the content
+        content_text += ''.join(map(lambda x: x.extract().replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content_html[(lambda x: x-1 if x > 0 else 0)(article_start):]))
         # remove HTML and replace CR by LF
         content_text = re.sub('<[^<]+?>', '', content_text).replace(u'\r', u'\x0a')
 
         # treatment of special case when content contains words at the start that indicate a location
-        if content_text.startswith(("Bezirk:", "Ort:", "Ortsteil:", "Ortsteil :")):
-            contentdict['district'] = re.sub(r'(Ort:|Bezirk:|Ortsteil:|Ortsteil :)\s*', '', content_text.splitlines()[0]).strip()
-            # removes first line of the string
-            content_text = '\n'.join(content_text.split('\n')[1:]).strip()
 
-        contentdict['content'] = content_text
+        #if re.match(r'^(Bezirk|Ort)', content_text):#content_text.startswith(("Bezirk:", "Ort:", "Ortsteil:", "Ortsteil :")):
+            #contentdict['district'] = re.sub(r'(Ort|Bezirk|Ortsteil|Ortsteil)( *):\s*', '', content_text.splitlines()[0]).strip()
+            # removes first line of the string
+        #    content_text = '\n'.join(content_text.split('\n')[1:]).strip()
+        begin_index = 0
+        #print content_text
+        for i, val in enumerate(content_text.split('\n')):
+            if len(val) > 70:
+                begin_index = i
+                break
+        #print '###'
+        #temp = content_text.split('\n')[begin_index:]
+        #print '\n'.join(temp)
+        contentdict['content'] = '\n'.join(content_text.split('\n')[begin_index:]).strip()#content_text[begin_index:]
         session.add(Report(id = contentdict['id'], street = contentdict['street'],
                            content = contentdict['content'], district = contentdict['district'], url = contentdict['url'], time = contentdict['time'],
                            title = contentdict['title']))
