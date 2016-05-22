@@ -28,6 +28,7 @@ class FireArchiveSpider(FireSpider):
     )
 
     def __init__(self):
+        FireSpider.__init__(self)
         self.parse = self.parse_monthly_reports
 
     def archive_months(self, response):

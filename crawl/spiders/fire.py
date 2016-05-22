@@ -107,25 +107,37 @@ class FireSpider(scrapy.Spider):
         contentdict['time'] = str(article_time)
         contentdict['street'] = "".join(
             article_content[0].extract().replace(u'\xa0', u' ').strip())
+
+        # treatment of special case when street is in a font-tag
+        if not contentdict['street']:
+            if len(article.xpath('.//p/font/text()')) > 0:
+                contentdict['street'] = "".join(
+                article.xpath('.//p/font/text()')[0].extract().replace(u'\xa0', u' ').strip())
+
         contentdict['street'] = re.sub(r'^: ', '', contentdict['street'])
         contentdict['district'] = "".join(
             article_content[article_start - 1].extract().replace(u'\xa0', u' ').strip())
         contentdict['district'] = re.sub(r'^: ', '', contentdict['district'])
         # move street and/or district inside content if a certain length is exceeded
-        if len(contentdict['street']) > 40:
-            #content_text += ''.join(contentdict['street'] + '\r')
+        if len(contentdict['street']) > 100:
             contentdict['street'] = ''
             article_start -= 1
-        if len(contentdict['district']) > 25:
-            #content_text += ''.join(contentdict['district'] + '\r')
+        if len(contentdict['district']) > 30:
             contentdict['district'] = ''
             article_start -= 1
 
         # content_text += ''.join(map(lambda x: x.extract().replace(u'\xa0', u' ').replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content[article_start:]))
         content_text += ''.join(map(lambda x: x.extract().replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n'), article_content_html[1:]))
-        content_text = re.sub('<[^<]+?>', '', content_text)
-        # replace CR by LF
-        content_text = content_text.replace(u'\r', u'\x0a')
+
+        # remove HTML and replace CR by LF
+        content_text = re.sub('<[^<]+?>', '', content_text).replace(u'\r', u'\x0a')
+
+        # treatment of special case when content contains words at the start that indicate a location
+        if content_text.startswith(("Bezirk:", "Ort:", "Ortsteil:", "Ortsteil :")):
+            contentdict['district'] = re.sub(r'(Ort:|Bezirk:|Ortsteil:|Ortsteil :)\s*', '', content_text.splitlines()[0]).strip()
+            # removes first line of the string
+            content_text = '\n'.join(content_text.split('\n')[1:]).strip()
+
         contentdict['content'] = content_text
         session.add(Report(id = contentdict['id'], street = contentdict['street'],
                            content = contentdict['content'], district = contentdict['district'], url = contentdict['url'], time = contentdict['time'],
