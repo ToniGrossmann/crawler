@@ -9,6 +9,7 @@ import urlparse
 import re
 import scrapy
 import logging
+import sys
 # import urlparse
 import time
 from datetime import datetime
@@ -17,49 +18,27 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.testing.schema import Column
 from sqlalchemy import Column, Integer, String, Boolean, create_engine
 from sqlalchemy import func
-import sys
+from crawl.spiders.fire import FireSpider
 
-import sqlite3
-from natsort import natsort_keygen, ns
-
-Base = declarative_base()
-
-
-class FireArchiveSpider(scrapy.Spider):
+class FireArchiveSpider(FireSpider):
     name = "fire_archive"
     allowed_domains = ["www.berliner-feuerwehr.de"]
     start_urls = (
         'http://www.berliner-feuerwehr.de/aktuelles/einsatzarchiv/',
     )
-    conn = None
 
     def __init__(self):
-
-        engine = create_engine('sqlite:///sqlite.db', echo=False)
-        self.Session = sessionmaker(bind=engine)
-        Base.metadata.create_all(engine)
-        #self.connect_to_sqlite()
-
-    def natural_sort(self, l):
-        convert = lambda text: int(text) if text.isdigit() else text
-        alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
-        return sorted(l, key=alphanum_key)
+        self.parse = self.parse_monthly_reports
 
     def archive_months(self, response):
         return response.xpath('//div[@class="news-amenu-container"]/ul/li/a/@href')
 
-    def reports(self, response):
-        return response.xpath('//div[@class="news-list-item"]/p/span[@class="nlmore"]/a/@href')
-
-    def pages(self, response):
-        return response.xpath('//div[@class="news-list-browse"]/ul/li/a/@href')
-
-    def parse(self, response):
+    def parse_monthly_reports(self, response):
         archive_months = self.archive_months(response)
         for month in archive_months:
             url = response.urljoin(month.extract())
-            yield scrapy.Request(url, self.parse_monthly_reports)
-
+            yield scrapy.Request(url, self.parse_reports)
+"""
     def parse_monthly_reports(self, response):
         session = self.Session()
         reports = self.reports(response)
@@ -74,8 +53,6 @@ class FireArchiveSpider(scrapy.Spider):
                 yield scrapy.Request(url, self.parse_report_data)
 
         pages_links = response.xpath('//div[@class="news-list-browse"]/ul/li/a/@href').extract()
-        #print("PAGES LINKS:")
-        #print(pages_links)
         pages_text = response.xpath('//div[@class="news-list-browse"]/ul/li/a/text()').extract()
         pagedict = dict(zip(pages_text, pages_links))
         logging.info("Current URL: {}".format(response.url))
@@ -85,13 +62,9 @@ class FireArchiveSpider(scrapy.Spider):
             first_last = self.natural_sort(
                 [item for item, count in collections.Counter(pages_links).items() if count > 1])
             logging.info("first_last: {}".format(first_last))
-            #print("first_last: ")
-            #print(first_last)
             if len(first_last) > 1:
                 url = response.urljoin(first_last[1])
-                #print("im if: " + str(len(first_last)))
             else:
-                #print("im else: " + str(len(first_last)))
                 url = response.urljoin(first_last[0])
                 # url = response.urljoin(pages_links[-2])
             logging.info("Next URL: {}".format(url))
@@ -101,7 +74,7 @@ class FireArchiveSpider(scrapy.Spider):
             logging.debug("Max page: {}".format(self.max_page))
             # if pages[-1].xpath(u'//a[▸]'):#extract() == u'▸':
             #    url = response.urljoin(pages[-2].xpath('//a/@href').extract())
-            #    yield scrapy.Request(url, self.parse)
+            #    yield scrapy.Request(url, self.parse)""""""
 
     def parse_report_data(self, response):
         session = self.Session()
@@ -156,9 +129,9 @@ class FireArchiveSpider(scrapy.Spider):
             content_text = '\n'.join(content_text.split('\n')[1:])
 
         # treatment of special case when street and district is missing
-        if not contentdict['street'] and not contentdict['district']:
-            content_text = ''.join(article.xpath('.//p').extract())
-            content_text = content_text.replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n')
+        #if not contentdict['street'] and not contentdict['district']:
+        #    content_text = ''.join(article.xpath('.//p').extract())
+        #    content_text = content_text.replace('\r', u'\x1F601').strip().replace(u'\x1F601', '\n')
 
         # remove HTML and replace CR by LF
         content_text = re.sub('<[^<]+?>', '', content_text).replace(u'\r', u'\x0a')
@@ -173,33 +146,4 @@ class FireArchiveSpider(scrapy.Spider):
         reload(sys)
         sys.setdefaultencoding("unicode-escape")
         logging.debug(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')))
-
-    def parse_results(self, response):
-
-        logging.info(response.url)
-        # reports = self.reports(response)
-        # pages = self.pages(response)
-        # for s in reports:
-        #    logging.info("Einsatz: {}".format(response.urljoin(s.extract())))
-        # for s in pages:
-        #    logging.info("Seite: {}".format(response.urljoin(s.extract())))
-
-        # pass
-
-    def parse_report_pages(self, response):
-        for href in self.pages(response):
-            url = response.urljoin(href.extract())
-            yield scrapy.Request(url, callback=self.parse_report_pages)
-
-class Report(Base):
-    #                '''CREATE TABLE reports (id INTEGER PRIMARY KEY, street TEXT, content TEXT, district TEXT, url TEXT, time TEXT, title TEXT, kind TEXT)''')
-
-    __tablename__ = 'reports'
-    id = Column(Integer, primary_key=True)
-    street = Column(String)
-    content = Column(String)
-    district = Column(String)
-    url = Column(String)
-    time = Column(String)
-    title = Column(String)
-    kind = Column(String, default='fire')
+"""

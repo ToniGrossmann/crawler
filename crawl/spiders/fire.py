@@ -38,7 +38,7 @@ class FireSpider(scrapy.Spider):
         engine = create_engine('sqlite:///sqlite.db', echo=False)
         self.Session = sessionmaker(bind=engine)
         Base.metadata.create_all(engine)
-        #self.connect_to_sqlite()
+        self.parse = self.parse_reports
 
     def natural_sort(self, l):
         convert = lambda text: int(text) if text.isdigit() else text
@@ -51,7 +51,10 @@ class FireSpider(scrapy.Spider):
     def pages(self, response):
         return response.xpath('//div[@class="news-list-browse"]/ul/li/a/@href')
 
-    def parse(self, response):
+    #def parse(self, response):
+    #    pass
+
+    def parse_reports(self, response):
         session = self.Session()
         reports = self.reports(response)
         # contentdict['id'] = re.search(r"([0-9]+)\/$", response.url).group(1)
@@ -78,15 +81,11 @@ class FireSpider(scrapy.Spider):
                 url = response.urljoin(first_last[1])
             else:
                 url = response.urljoin(first_last[0])
-                # url = response.urljoin(pages_links[-2])
             logging.info("Next URL: {}".format(url))
-            yield scrapy.Request(url, self.parse)
+            yield scrapy.Request(url, self.parse_reports)
         else:
             self.max_page = str(response.url).split('/')[-2]
             logging.debug("Max page: {}".format(self.max_page))
-            # if pages[-1].xpath(u'//a[▸]'):#extract() == u'▸':
-            #    url = response.urljoin(pages[-2].xpath('//a/@href').extract())
-            #    yield scrapy.Request(url, self.parse)
 
     def parse_report_data(self, response):
         session = self.Session()
@@ -137,26 +136,7 @@ class FireSpider(scrapy.Spider):
         sys.setdefaultencoding("unicode-escape")
         logging.debug(u''.join(json.dumps(contentdict, indent=True, ensure_ascii=False).replace(u'\\n', u'\n')))
 
-    def parse_results(self, response):
-
-        logging.info(response.url)
-        # reports = self.reports(response)
-        # pages = self.pages(response)
-        # for s in reports:
-        #    logging.info("Einsatz: {}".format(response.urljoin(s.extract())))
-        # for s in pages:
-        #    logging.info("Seite: {}".format(response.urljoin(s.extract())))
-
-        # pass
-
-    def parse_report_pages(self, response):
-        for href in self.pages(response):
-            url = response.urljoin(href.extract())
-            yield scrapy.Request(url, callback=self.parse_report_pages)
-
 class Report(Base):
-    #                '''CREATE TABLE reports (id INTEGER PRIMARY KEY, street TEXT, content TEXT, district TEXT, url TEXT, time TEXT, title TEXT, kind TEXT)''')
-
     __tablename__ = 'reports'
     id = Column(Integer, primary_key=True)
     street = Column(String)
