@@ -172,6 +172,12 @@ class FireSpider(scrapy.Spider):
         #temp = content_text.split('\n')[begin_index:]
         #print '\n'.join(temp)
         contentdict['content'] = '\n'.join(content_text.split('\n')[begin_index:]).strip()#content_text[begin_index:]
+
+        if contentdict['content'].startswith(("Adresse", "Ort")):
+            if len(contentdict['content'].split('\n')[0]) < 100:
+                #print("specialcase - " + str(contentdict['id']) + " :\n" + contentdict['content'].split('\n')[0])
+                contentdict['content'] = '\n'.join(contentdict['content'].split('\n')[1:]).strip()
+
         session.add(Report(id = contentdict['id'], street = contentdict['street'],
                            content = contentdict['content'], district = contentdict['district'], url = contentdict['url'], time = contentdict['time'],
                            title = contentdict['title']))
