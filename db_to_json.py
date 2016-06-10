@@ -9,7 +9,7 @@ reload(sys)
 sys.setdefaultencoding("unicode-escape")
 conn = sqlite3.connect('sqlite.db')
 cur = conn.cursor()
-cur.execute('select * from reports')
+cur.execute('select id, street, content as description, district, url, time, title, kind from reports')
 with open('reports.json', 'w') as file:
 
     r = [dict((cur.description[i][0], (lambda x: str(x).encode('utf-8') if cur.description[i][0] != "id" else x)(value)) \
